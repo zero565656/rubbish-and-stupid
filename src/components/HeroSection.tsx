@@ -1,21 +1,50 @@
 import { useState } from "react";
+import { useJournalMetadata } from "@/hooks/useJournalMetadata";
 
 const HeroSection = () => {
   const [hovered, setHovered] = useState(false);
+  const { data, isLoading, isError } = useJournalMetadata();
+
+  const metaLine = isLoading
+    ? "Loading..."
+    : isError
+      ? "rubbish & stupid"
+      : `Vol. ${data!.volume}, Issue ${data!.issue} · ISSN: ${data!.issn}`;
+
+  const title = isLoading
+    ? "\u00a0"
+    : isError
+      ? "The Paradigm Shift of Doing Absolutely Nothing."
+      : data!.hero_title;
+
+  const subtitle = isLoading
+    ? "\u00a0"
+    : isError
+      ? "Advancing the frontiers of human procrastination through peer-reviewed nonsense."
+      : data!.hero_subtitle;
 
   return (
     <section className="border-b border-border">
       <div className="container mx-auto px-6 py-16 md:py-24 max-w-3xl">
-        <p className="text-xs font-sans uppercase tracking-[0.3em] text-muted-foreground mb-8">
-          Vol. 1, Issue 42 · ISSN: 0000-0000
+        <p
+          className={`text-xs font-sans uppercase tracking-[0.3em] text-muted-foreground mb-8 transition-opacity duration-300 ${isLoading ? "opacity-40 animate-pulse" : "opacity-100"
+            }`}
+        >
+          {metaLine}
         </p>
 
-        <h1 className="font-serif text-3xl md:text-5xl lg:text-6xl leading-tight tracking-tight text-foreground mb-6">
-          The Paradigm Shift of Doing Absolutely Nothing.
+        <h1
+          className={`font-serif text-3xl md:text-5xl lg:text-6xl leading-tight tracking-tight text-foreground mb-6 transition-opacity duration-300 ${isLoading ? "opacity-40 animate-pulse" : "opacity-100"
+            }`}
+        >
+          {title}
         </h1>
 
-        <p className="font-sans text-base md:text-lg text-muted-foreground leading-relaxed mb-10 max-w-xl">
-          Advancing the frontiers of human procrastination through peer-reviewed nonsense.
+        <p
+          className={`font-sans text-base md:text-lg text-muted-foreground leading-relaxed mb-10 max-w-xl transition-opacity duration-300 ${isLoading ? "opacity-40 animate-pulse" : "opacity-100"
+            }`}
+        >
+          {subtitle}
         </p>
 
         <button

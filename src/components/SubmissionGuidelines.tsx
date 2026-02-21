@@ -1,10 +1,14 @@
-const rules = [
-  "Font size must be 11.5pt. Not 11, not 12. We will reject it.",
-  "Peer review is done by a group of cats walking over a keyboard.",
-  "Plagiarism is prohibited, unless it's really, really good.",
-];
+import { useSubmissionRules } from "@/hooks/useSubmissionRules";
+
+const RuleSkeleton = () => (
+  <li className="animate-pulse pl-2">
+    <div className="h-4 bg-muted rounded w-3/4" />
+  </li>
+);
 
 const SubmissionGuidelines = () => {
+  const { data: rules, isLoading, isError, error } = useSubmissionRules();
+
   return (
     <section>
       <div className="container mx-auto px-6 py-16 md:py-20">
@@ -13,12 +17,26 @@ const SubmissionGuidelines = () => {
         </h2>
 
         <ol className="list-decimal list-inside space-y-4 max-w-2xl">
-          {rules.map((rule, i) => (
+          {isLoading && (
+            <>
+              <RuleSkeleton />
+              <RuleSkeleton />
+              <RuleSkeleton />
+            </>
+          )}
+
+          {isError && (
+            <li className="font-sans text-sm text-destructive pl-2">
+              Failed to load guidelines: {error.message}
+            </li>
+          )}
+
+          {rules?.map((rule) => (
             <li
-              key={i}
+              key={rule.id}
               className="font-sans text-sm md:text-base text-muted-foreground leading-relaxed pl-2"
             >
-              {rule}
+              {rule.rule_text}
             </li>
           ))}
         </ol>

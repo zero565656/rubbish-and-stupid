@@ -48,9 +48,14 @@ const SubmissionGuidelines = () => {
           <p className="font-serif italic text-sm text-muted-foreground">
             rubbish &amp; stupid
           </p>
-          <p className="font-sans text-xs text-muted-foreground">
-            © 2025 r&amp;s. All rights reversed.
-          </p>
+          <div className="flex items-center gap-4">
+            <p className="font-sans text-xs text-muted-foreground">
+              © 2025 r&amp;s. All rights reversed.
+            </p>
+            <a href="/admin/login" className="font-sans text-xs text-muted-foreground hover:text-foreground transition-colors opacity-50 hover:opacity-100">
+              Admin Login
+            </a>
+          </div>
         </div>
       </div>
     </section>

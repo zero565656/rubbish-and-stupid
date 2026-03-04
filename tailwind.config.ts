@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        serif: ["'Playfair Display'", "Georgia", "'Times New Roman'", "serif"],
-        sans: ["'Inter'", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+        serif: ["'Merriweather'", "'Lora'", "Georgia", "serif"],
+        sans: ["'Inter'", "-apple-system", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",

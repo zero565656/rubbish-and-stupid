@@ -1,10 +1,8 @@
 import { useState } from "react";
 
 const navLinks = [
-  "Current Issue",
-  "Archives",
-  "Submit Paper",
-  "Why Are You Here?",
+  { label: "Submit Paper", path: "/submit" },
+  { label: "About Journal", path: "/about" },
 ];
 
 const JournalHeader = () => {
@@ -21,11 +19,11 @@ const JournalHeader = () => {
         <nav className="hidden md:flex items-center gap-8">
           {navLinks.map((link) => (
             <a
-              key={link}
-              href="#"
+              key={link.label}
+              href={link.path}
               className="text-xs font-sans uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors duration-300"
             >
-              {link}
+              {link.label}
             </a>
           ))}
         </nav>
@@ -51,11 +49,11 @@ const JournalHeader = () => {
         <nav className="md:hidden border-t border-border px-6 py-4 flex flex-col gap-3">
           {navLinks.map((link) => (
             <a
-              key={link}
-              href="#"
+              key={link.label}
+              href={link.path}
               className="text-xs font-sans uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
             >
-              {link}
+              {link.label}
             </a>
           ))}
         </nav>

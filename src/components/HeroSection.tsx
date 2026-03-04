@@ -46,14 +46,6 @@ const HeroSection = () => {
         >
           {subtitle}
         </p>
-
-        <button
-          onMouseEnter={() => setHovered(true)}
-          onMouseLeave={() => setHovered(false)}
-          className="bg-primary text-primary-foreground font-sans text-sm uppercase tracking-widest px-8 py-4 border-2 border-foreground hover:bg-background hover:text-foreground transition-all duration-300"
-        >
-          {hovered ? "Don't click me" : "Read Latest Issue"}
-        </button>
       </div>
     </section>
   );

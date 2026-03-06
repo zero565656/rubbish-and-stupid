@@ -6,14 +6,17 @@ import { SearchBar } from "./SearchBar";
 
 // Skeleton placeholder shown while loading
 const ArticleSkeleton = () => (
-  <article className="py-8 first:pt-0 last:pb-0 animate-pulse">
-    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-      <div className="flex-1 space-y-2">
-        <div className="h-5 bg-muted rounded w-3/4" />
-        <div className="h-3 bg-muted rounded w-1/3" />
-        <div className="h-3 bg-muted rounded w-1/2" />
+  <article className="py-10 border-b-2 border-dashed border-gray-200 last:border-none animate-pulse">
+    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+      <div className="flex-shrink-0 w-12 md:w-20 pt-1">
+        <div className="h-12 w-16 bg-muted rounded" />
       </div>
-      <div className="h-9 w-32 bg-muted rounded self-start" />
+      <div className="flex-1 space-y-4">
+        <div className="h-8 bg-muted rounded w-3/4" />
+        <div className="h-4 bg-muted rounded w-1/3" />
+        <div className="h-4 bg-muted rounded w-1/2" />
+      </div>
+      <div className="h-10 w-36 bg-muted self-start border-2 border-border" />
     </div>
   </article>
 );
@@ -47,26 +50,37 @@ const ArticleList = () => {
   };
 
   return (
-    <section className="border-b border-border">
-      <div className="container mx-auto px-6 py-16 md:py-20">
-        <h2 className="font-serif text-2xl md:text-3xl text-foreground mb-2">
-          Table of Contents
-        </h2>
-        <p className="text-xs font-sans uppercase tracking-[0.3em] text-muted-foreground mb-10">
-          Current Issue · Original Research
-        </p>
+    <section className="bg-white">
+      <div className="max-w-7xl mx-auto px-6 py-16 md:py-24">
+
+        {/* Title Bar - 90s Newspaper layout */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-4 gap-4">
+          <div>
+            <h2 className="font-serif text-3xl md:text-5xl font-bold text-[#111111] uppercase tracking-tight">
+              IN THIS ISSUE
+            </h2>
+          </div>
+          <div className="text-left md:text-right">
+            <p className="font-mono text-sm uppercase tracking-[0.2em] text-[#1a4c3b] font-bold pb-1.5">
+              VOL. 2026 / GARBAGE COLLECTION
+            </p>
+          </div>
+        </div>
+
+        {/* Thick divider line */}
+        <div className="w-full h-[6px] bg-[#1a4c3b] mb-12" />
 
         {/* Search Bar */}
-        <div className="mb-8">
-          <SearchBar onSearch={handleSearch} placeholder="Search by title, author, DOI, or tag..." />
+        <div className="mb-14">
+          <SearchBar onSearch={handleSearch} placeholder="Search for specific nonsense..." />
           {searchQuery && (
-            <p className="text-xs text-muted-foreground mt-2">
+            <p className="text-sm font-mono text-gray-500 mt-3 uppercase tracking-wide">
               Showing {filteredArticles?.length || 0} result{filteredArticles?.length !== 1 ? "s" : ""} for "{searchQuery}"
             </p>
           )}
         </div>
 
-        <div className="divide-y divide-border">
+        <div className="flex flex-col gap-10">
           {isLoading && (
             <>
               <ArticleSkeleton />
@@ -76,49 +90,58 @@ const ArticleList = () => {
           )}
 
           {isError && (
-            <p className="py-8 font-sans text-sm text-destructive">
-              Failed to load articles: {error.message}
+            <p className="py-8 font-mono font-bold text-sm text-red-600 bg-red-50 p-4 border-l-4 border-red-600">
+              FAILED TO LOAD ARTICLES: {error.message}
             </p>
           )}
 
           {filteredArticles?.length === 0 && searchQuery && !isLoading && (
-            <div className="py-12 text-center border border-dashed border-border">
-              <p className="font-sans text-muted-foreground mb-2">No articles found matching "{searchQuery}"</p>
+            <div className="py-16 px-8 text-center border-4 border-dashed border-gray-200 bg-gray-50/50">
+              <p className="font-mono font-bold text-lg text-gray-600 mb-4 uppercase tracking-wider">No nonsense found matching "{searchQuery}"</p>
               <button
                 onClick={() => setSearchQuery("")}
-                className="text-xs text-primary hover:underline"
+                className="font-sans text-xs font-bold uppercase tracking-[0.1em] text-[#1a4c3b] border-b-2 border-[#1a4c3b] pb-1 hover:text-[#111111] hover:border-[#111111] transition-colors"
               >
-                Clear search
+                Clear Search & View All
               </button>
             </div>
           )}
 
-          {filteredArticles?.map((article) => (
-            <article key={article.id} className="py-8 first:pt-0 last:pb-0">
-              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+          {filteredArticles?.map((article, index) => (
+            <article key={article.id} className="group flex flex-col md:flex-row gap-6 md:gap-8 items-start relative pb-10 border-b-2 border-dashed border-gray-200 last:border-none">
+
+              {/* Large Serif Number */}
+              <div className="flex-shrink-0 w-12 md:w-20 pt-1">
+                <span className="font-serif text-4xl md:text-5xl font-bold text-gray-300 group-hover:text-[#1a4c3b] transition-colors duration-300 selection:bg-transparent">
+                  {(index + 1).toString().padStart(2, '0')}
+                </span>
+              </div>
+
+              <div className="flex-1 flex flex-col md:flex-row md:items-start md:justify-between gap-6 w-full">
                 <div className="flex-1">
-                  <h3 className="font-serif text-lg md:text-xl text-foreground mb-2 cursor-default group">
+                  <h3 className="font-serif text-2xl md:text-3xl font-bold text-[#111111] leading-tight mb-4">
                     <Link
                       to={`/article/${article.id}`}
-                      className="bg-[length:0%_1px] bg-no-repeat bg-left-bottom bg-gradient-to-r from-foreground to-foreground transition-[background-size] duration-500 hover:bg-[length:100%_1px] pb-0.5"
+                      className="bg-[length:0%_2px] bg-no-repeat bg-left-bottom bg-gradient-to-r from-[#1a4c3b] to-[#1a4c3b] transition-[background-size] duration-300 hover:bg-[length:100%_2px] pb-1"
                     >
                       {article.title}
                     </Link>
                   </h3>
-                  <p className="font-sans text-sm text-muted-foreground mb-1">
+
+                  <p className="font-mono text-sm tracking-wide text-[#1a4c3b] font-bold mb-2">
                     {article.author}
                   </p>
-                  <p className="font-sans text-xs text-muted-foreground">
-                    DOI: {article.doi} · Published {article.published_date}
+                  <p className="font-mono text-xs tracking-wider text-gray-500 mb-5">
+                    DOI: {article.doi} <span className="mx-2">|</span> Published {article.published_date}
                   </p>
 
                   {/* Display tags if present */}
                   {(article.tags && article.tags.length > 0) && (
-                    <div className="flex flex-wrap gap-1.5 mt-3">
+                    <div className="flex flex-wrap gap-2 mt-4">
                       {article.tags.map((tag) => (
                         <span
                           key={tag}
-                          className="text-[10px] font-sans uppercase tracking-wider bg-primary/10 text-primary px-2 py-0.5 border border-primary/20"
+                          className="text-[10px] font-sans font-bold uppercase tracking-widest bg-gray-100 text-gray-600 px-2 py-1 border border-gray-300 group-hover:bg-[#1a4c3b]/5 group-hover:text-[#1a4c3b] group-hover:border-[#1a4c3b]/20 transition-colors"
                         >
                           {tag}
                         </span>
@@ -127,15 +150,25 @@ const ArticleList = () => {
                   )}
                 </div>
 
-                <button
-                  onClick={() => handleDownload(article.pdf_url)}
-                  className="self-start font-sans text-xs uppercase tracking-widest border border-border px-5 py-2.5 text-muted-foreground hover:text-foreground hover:border-foreground transition-colors duration-300 whitespace-nowrap"
-                >
-                  Download PDF
-                </button>
+                <div className="self-start md:self-center mt-4 md:mt-0 flex-shrink-0">
+                  <button
+                    onClick={() => handleDownload(article.pdf_url)}
+                    className="font-sans text-xs font-bold uppercase tracking-[0.15em] border-2 border-[#1a4c3b] text-[#1a4c3b] px-6 py-3 hover:bg-[#1a4c3b] hover:text-white transition-all duration-300 whitespace-nowrap active:scale-95"
+                  >
+                    Download PDF
+                  </button>
+                </div>
               </div>
             </article>
           ))}
+        </div>
+      </div>
+
+      {/* Decorative page end */}
+      <div className="relative mt-16 w-screen left-1/2 right-1/2 -mx-[50vw]">
+        <div className="relative">
+          <div className="border-t-4 border-[#1a2a22]" />
+          <div className="absolute left-1/2 -translate-x-1/2 -top-3 bg-white px-4 text-[#1a2a22] text-sm">♦</div>
         </div>
       </div>
     </section>

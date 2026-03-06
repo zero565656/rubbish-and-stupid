@@ -1,30 +1,64 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Login = () => {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
+    const [pendingRedirect, setPendingRedirect] = useState(false);
     const navigate = useNavigate();
+    const { signIn, role, user, loading: authLoading } = useAuth();
+
+    useEffect(() => {
+        if (!pendingRedirect || authLoading || !user || !role) return;
+
+        if (role === "admin") {
+            toast.success("Welcome, Editor-in-Chief.");
+            navigate("/admin", { replace: true });
+            return;
+        }
+
+        if (role === "reviewer") {
+            toast.success("Welcome, Reviewer.");
+            navigate("/reviewer", { replace: true });
+            return;
+        }
+
+        if (role === "editor") {
+            toast.success("Welcome, Editor.");
+            navigate("/editor", { replace: true });
+            return;
+        }
+
+        if (role === "user") {
+            toast.success("Welcome back.");
+            navigate("/my-submissions", { replace: true });
+            return;
+        }
+
+        toast.error("Current account has no access permission.");
+        navigate("/", { replace: true });
+    }, [pendingRedirect, authLoading, user, role, navigate]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        setPendingRedirect(false);
 
-        const { error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-        });
+        const { error } = await signIn(email, password);
 
         setLoading(false);
 
         if (error) {
-            toast.error(error.message);
+            if (error.message.toLowerCase().includes("email not confirmed")) {
+                toast.error("邮箱未验证，请先到邮箱点击确认链接后再登录。");
+            } else {
+                toast.error(error.message);
+            }
         } else {
-            toast.success("Welcome, Editor-in-Chief.");
-            navigate("/admin");
+            setPendingRedirect(true);
         }
     };
 
@@ -36,7 +70,7 @@ const Login = () => {
                         rubbish &amp; stupid
                     </h2>
                     <p className="text-xs font-sans uppercase tracking-[0.3em] text-muted-foreground">
-                        Editorial Review Board
+                        Account Login
                     </p>
                 </div>
 
@@ -78,6 +112,9 @@ const Login = () => {
                 </form>
 
                 <p className="text-center text-xs font-sans text-muted-foreground">
+                    <a href="/register-author" className="hover:text-foreground transition-colors underline underline-offset-4 mr-4">
+                        Author Register
+                    </a>
                     <a href="/" className="hover:text-foreground transition-colors underline underline-offset-4">
                         Return to Public Desk
                     </a>

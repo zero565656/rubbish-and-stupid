@@ -92,13 +92,16 @@ const Register = () => {
 
             if (authError) throw authError;
             if (!authData.user) throw new Error("Registration failed");
+            if (!authData.session) {
+                throw new Error("Email not confirmed. Please confirm your email first, or disable email confirmation in Supabase Auth settings.");
+            }
 
             // Update the profile with reviewer role
             const { error: profileError } = await supabase.from("profiles").update({
                 role: "reviewer",
                 full_name: fullName,
                 institution,
-                research_field,
+                research_field: researchField,
                 bio,
             }).eq("id", authData.user.id);
 
@@ -113,7 +116,11 @@ const Register = () => {
             toast.success("Registration successful! You can now log in as a reviewer.");
             navigate("/admin/login");
         } catch (error: any) {
-            toast.error(`Registration failed: ${error.message}`);
+            if (String(error?.message || "").toLowerCase().includes("email not confirmed")) {
+                toast.error("邮箱未验证。请先验证邮箱，或在 Supabase 的 Auth 设置中关闭邮箱验证后重试。");
+            } else {
+                toast.error(`Registration failed: ${error.message}`);
+            }
         } finally {
             setRegistering(false);
         }

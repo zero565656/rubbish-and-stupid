@@ -1,12 +1,46 @@
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navLinks = [
   { label: "Submit Paper", path: "/submit" },
+  { label: "My Submissions", path: "/my-submissions" },
   { label: "About Journal", path: "/about" },
 ];
 
 const JournalHeader = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user, role, signOut } = useAuth();
+
+  const accountLinks = user
+    ? role === "admin"
+      ? [
+        { label: "Admin", path: "/admin" },
+        { label: "Users", path: "/admin/users" },
+        { label: "Profile", path: "/admin/profile" },
+      ]
+      : role === "editor"
+        ? [
+          { label: "Editor", path: "/editor" },
+          { label: "Profile", path: "/editor/profile" },
+        ]
+      : role === "reviewer"
+        ? [
+          { label: "Reviewer", path: "/reviewer" },
+          { label: "Profile", path: "/reviewer/profile" },
+        ]
+        : [
+          { label: "My Desk", path: "/my-submissions" },
+          { label: "Profile", path: "/user/profile" },
+        ]
+    : [
+      { label: "Author Register", path: "/register-author" },
+      { label: "Login", path: "/admin/login" },
+    ];
+
+  const handleLogout = async () => {
+    await signOut();
+    window.location.href = "/";
+  };
 
   return (
     <header className="border-b border-border">
@@ -26,6 +60,23 @@ const JournalHeader = () => {
               {link.label}
             </a>
           ))}
+          {accountLinks.map((link) => (
+            <a
+              key={link.label}
+              href={link.path}
+              className="text-xs font-sans uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors duration-300"
+            >
+              {link.label}
+            </a>
+          ))}
+          {user && (
+            <button
+              onClick={handleLogout}
+              className="text-xs font-sans uppercase tracking-widest text-muted-foreground hover:text-destructive transition-colors duration-300"
+            >
+              Logout
+            </button>
+          )}
         </nav>
 
         {/* Mobile toggle */}
@@ -56,6 +107,23 @@ const JournalHeader = () => {
               {link.label}
             </a>
           ))}
+          {accountLinks.map((link) => (
+            <a
+              key={link.label}
+              href={link.path}
+              className="text-xs font-sans uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {link.label}
+            </a>
+          ))}
+          {user && (
+            <button
+              onClick={handleLogout}
+              className="text-left text-xs font-sans uppercase tracking-widest text-muted-foreground hover:text-destructive transition-colors"
+            >
+              Logout
+            </button>
+          )}
         </nav>
       )}
     </header>

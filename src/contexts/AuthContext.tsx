@@ -11,7 +11,9 @@ interface AuthContextType {
     signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
     signUp: (email: string, password: string, fullName?: string) => Promise<{ error: Error | null }>;
     signOut: () => Promise<void>;
+    refreshProfile: () => Promise<void>;
     isAdmin: boolean;
+    isEditor: boolean;
     isReviewer: boolean;
 }
 
@@ -34,7 +36,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             setUser(session?.user ?? null);
-            if (!session?.user) {
+            if (session?.user) {
+                setLoading(true);
+                fetchProfile(session.user.id);
+            } else {
                 setProfile(null);
                 setLoading(false);
             }
@@ -52,12 +57,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (!error && data) {
             setProfile(data as Profile);
+        } else {
+            setProfile(null);
         }
         setLoading(false);
     };
 
+    const refreshProfile = async () => {
+        if (!user?.id) return;
+        setLoading(true);
+        await fetchProfile(user.id);
+    };
+
     const signIn = async (email: string, password: string) => {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        setLoading(true);
+        const normalizedEmail = email.trim().toLowerCase();
+        const normalizedPassword = password.trim();
+        const { error } = await supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password: normalizedPassword,
+        });
+        if (error) {
+            setLoading(false);
+        }
         return { error: error as Error | null };
     };
 
@@ -87,7 +109,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signIn,
         signUp,
         signOut,
+        refreshProfile,
         isAdmin: profile?.role === 'admin',
+        isEditor: profile?.role === 'editor',
         isReviewer: profile?.role === 'reviewer',
     };
 

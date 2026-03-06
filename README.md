@@ -64,6 +64,30 @@ This project is built with:
 
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
 
+## Linux server deploy script
+
+This repo includes a one-command deploy script for Linux + Nginx:
+
+1. Prepare env file:
+
+```sh
+cp .env.production.example .env.production
+```
+
+2. Fill `.env.production` values (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_REVIEWER_LOGIN_URL`).
+
+3. Run deploy:
+
+```sh
+bash scripts/deploy_linux.sh
+```
+
+Optional flags:
+
+```sh
+bash scripts/deploy_linux.sh --pull --web-root /var/www/r-s-journal
+```
+
 ## Can I connect a custom domain to my Lovable project?
 
 Yes, you can!
@@ -71,3 +95,32 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+
+## SMTP setup (Supabase Edge Function)
+
+This project sends reviewer invitation emails via `supabase/functions/send-email`.
+
+### Local development
+
+SMTP variables are configured in:
+
+- `supabase/functions/.env.local`
+
+Run function locally with:
+
+```sh
+supabase functions serve send-email --env-file supabase/functions/.env.local
+```
+
+### Production (Supabase project secrets)
+
+Set the same variables in your Supabase project:
+
+```sh
+supabase secrets set \
+  SMTP_HOST=smtp.163.com \
+  SMTP_PORT=465 \
+  SMTP_USER=zero85958@163.com \
+  SMTP_PASS=YOUR_SMTP_AUTH_CODE \
+  SMTP_FROM=zero85958@163.com
+```

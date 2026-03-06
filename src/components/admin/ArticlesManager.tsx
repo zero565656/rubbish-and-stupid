@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import type { Article } from "@/types/database.types";
 
-// ── Predefined discipline tags ──────────────────────────────────────────────
+// 鈹€鈹€ Predefined discipline tags 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 const PRESET_TAGS = [
     "Computer Science",
     "Biology",
@@ -21,8 +21,9 @@ const PRESET_TAGS = [
     "Neuroscience",
     "Materials Science",
 ];
+const DEFAULT_ARTICLE_TYPES = [...PRESET_TAGS];
 
-// ── Tag Picker ──────────────────────────────────────────────────────────────
+// 鈹€鈹€ Tag Picker 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 const TagPicker = ({
     selected,
     onChange,
@@ -99,7 +100,7 @@ const TagPicker = ({
                                 onClick={() => onChange(selected.filter((t) => t !== tag))}
                                 className="hover:text-destructive leading-none"
                             >
-                                ×
+                                脳
                             </button>
                         </span>
                     ))}
@@ -109,10 +110,12 @@ const TagPicker = ({
     );
 };
 
-// ── Article Form (used for both Add and Edit) ───────────────────────────────
+// 鈹€鈹€ Article Form (used for both Add and Edit) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 type FormData = {
     title: string;
     author: string;
+    article_type: string;
+    institution: string;
     doi: string;
     published_date: string;
     pdf_url: string;
@@ -122,6 +125,8 @@ type FormData = {
 const EMPTY_FORM: FormData = {
     title: "",
     author: "",
+    article_type: "",
+    institution: "",
     doi: "",
     published_date: new Date().toISOString().split("T")[0],
     pdf_url: "",
@@ -142,6 +147,8 @@ const ArticleModal = ({
             ? {
                 title: article.title,
                 author: article.author,
+                article_type: article.article_type ?? "",
+                institution: article.institution ?? "",
                 doi: article.doi,
                 published_date: article.published_date,
                 pdf_url: article.pdf_url ?? "",
@@ -158,6 +165,8 @@ const ArticleModal = ({
             const payload = {
                 title: form.title,
                 author: form.author,
+                article_type: form.article_type || null,
+                institution: form.institution || null,
                 doi: form.doi,
                 published_date: form.published_date,
                 pdf_url: form.pdf_url || null,
@@ -200,7 +209,7 @@ const ArticleModal = ({
                         onClick={onClose}
                         className="text-muted-foreground hover:text-foreground text-2xl leading-none"
                     >
-                        ×
+                        脳
                     </button>
                 </div>
 
@@ -229,6 +238,32 @@ const ArticleModal = ({
                             onChange={(e) => setForm({ ...form, author: e.target.value })}
                             className="w-full border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                         />
+                    </div>
+
+                    {/* Article Type + Institution */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <label className="block text-xs font-sans uppercase tracking-widest font-semibold text-foreground">
+                                Article Type
+                            </label>
+                            <input
+                                value={form.article_type}
+                                onChange={(e) => setForm({ ...form, article_type: e.target.value })}
+                                className="w-full border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                placeholder="e.g., Computer Science"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="block text-xs font-sans uppercase tracking-widest font-semibold text-foreground">
+                                Institution
+                            </label>
+                            <input
+                                value={form.institution}
+                                onChange={(e) => setForm({ ...form, institution: e.target.value })}
+                                className="w-full border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                placeholder="e.g., University of Example"
+                            />
+                        </div>
                     </div>
 
                     {/* DOI + Date in a row */}
@@ -306,12 +341,16 @@ const ArticleModal = ({
     );
 };
 
-// ── Main ArticlesManager component ──────────────────────────────────────────
+// 鈹€鈹€ Main ArticlesManager component 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 const ArticlesManager = () => {
     const [articles, setArticles] = useState<Article[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadingArticleTypeLibrary, setLoadingArticleTypeLibrary] = useState(true);
     const [editingArticle, setEditingArticle] = useState<Article | "new" | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [articleTypeSettingsId, setArticleTypeSettingsId] = useState<string>("");
+    const [articleTypeLibrary, setArticleTypeLibrary] = useState<string[]>(DEFAULT_ARTICLE_TYPES);
+    const [savingArticleTypeLibrary, setSavingArticleTypeLibrary] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [filterTag, setFilterTag] = useState<string>("all");
 
@@ -330,8 +369,85 @@ const ArticlesManager = () => {
         setLoading(false);
     };
 
+    const fetchArticleTypeLibrary = async () => {
+        setLoadingArticleTypeLibrary(true);
+        const { data, error } = await supabase
+            .from("journal_settings")
+            .select("id, article_type_library")
+            .limit(1)
+            .maybeSingle();
+
+        if (error) {
+            toast.error(`Failed to load article type library: ${error.message}`);
+            setArticleTypeLibrary(DEFAULT_ARTICLE_TYPES);
+            setLoadingArticleTypeLibrary(false);
+            return;
+        }
+
+        if (!data?.id) {
+            const { data: inserted, error: insertError } = await supabase
+                .from("journal_settings")
+                .insert([{ article_type_library: DEFAULT_ARTICLE_TYPES }] as any)
+                .select("id, article_type_library")
+                .single();
+
+            if (insertError) {
+                toast.error(`Failed to initialize article type library: ${insertError.message}`);
+                setArticleTypeLibrary(DEFAULT_ARTICLE_TYPES);
+                setLoadingArticleTypeLibrary(false);
+                return;
+            }
+
+            setArticleTypeSettingsId(inserted.id);
+            const initialLibrary = (inserted as any).article_type_library || DEFAULT_ARTICLE_TYPES;
+            setArticleTypeLibrary(initialLibrary.length > 0 ? initialLibrary : DEFAULT_ARTICLE_TYPES);
+            setLoadingArticleTypeLibrary(false);
+            return;
+        }
+
+        setArticleTypeSettingsId((data as any).id);
+        const dbLibrary = ((data as any).article_type_library || []) as string[];
+        setArticleTypeLibrary(dbLibrary.length > 0 ? dbLibrary : DEFAULT_ARTICLE_TYPES);
+        setLoadingArticleTypeLibrary(false);
+    };
+
+    const saveArticleTypeLibrary = async () => {
+        if (!articleTypeSettingsId) {
+            toast.error("Journal settings record not found. Please reload this page.");
+            return;
+        }
+
+        const normalized = Array.from(
+            new Set(
+                articleTypeLibrary
+                    .map((item) => item.trim())
+                    .filter((item) => item.length > 0)
+            )
+        );
+
+        if (normalized.length === 0) {
+            toast.error("Article type library cannot be empty.");
+            return;
+        }
+
+        setSavingArticleTypeLibrary(true);
+        const { error } = await supabase
+            .from("journal_settings")
+            .update({ article_type_library: normalized } as any)
+            .eq("id", articleTypeSettingsId);
+
+        if (error) {
+            toast.error(`Failed to save article type library: ${error.message}`);
+        } else {
+            setArticleTypeLibrary(normalized);
+            toast.success("Global article type library saved.");
+        }
+        setSavingArticleTypeLibrary(false);
+    };
+
     useEffect(() => {
         fetchArticles();
+        fetchArticleTypeLibrary();
     }, []);
 
     const handleDelete = async (id: string) => {
@@ -347,9 +463,10 @@ const ArticlesManager = () => {
     };
 
     // Gather all unique tags across articles for filter dropdown
-    const allTags = Array.from(
-        new Set(articles.flatMap((a) => a.tags ?? []))
-    ).sort();
+    const allTags = useMemo(() => {
+        const articleTags = articles.flatMap((a) => a.tags ?? []);
+        return Array.from(new Set([...articleTags, ...articleTypeLibrary])).sort();
+    }, [articles, articleTypeLibrary]);
 
     // Filter by search + tag
     const filtered = articles.filter((a) => {
@@ -386,6 +503,32 @@ const ArticlesManager = () => {
                 >
                     + Add Article
                 </button>
+            </div>
+
+            {/* Global Article Type Library */}
+            <div className="border border-border bg-card p-6 mb-6 space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                    <div>
+                        <h3 className="font-serif text-xl text-foreground">Global Article Type Library</h3>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            This list is used by the submission form Article Type dropdown.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={saveArticleTypeLibrary}
+                        disabled={loadingArticleTypeLibrary || savingArticleTypeLibrary}
+                        className="bg-secondary text-secondary-foreground text-xs uppercase tracking-widest px-4 py-2 border border-border hover:bg-secondary/80 disabled:opacity-50"
+                    >
+                        {savingArticleTypeLibrary ? "Saving..." : "Save Types"}
+                    </button>
+                </div>
+
+                {loadingArticleTypeLibrary ? (
+                    <p className="text-sm text-muted-foreground animate-pulse">Loading article type library...</p>
+                ) : (
+                    <TagPicker selected={articleTypeLibrary} onChange={setArticleTypeLibrary} />
+                )}
             </div>
 
             {/* Filter bar */}
@@ -434,22 +577,19 @@ const ArticlesManager = () => {
                                 </h3>
                                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground font-sans mb-3">
                                     <span>{article.author}</span>
-                                    <span className="hidden md:inline">·</span>
+                                    {article.article_type && <span>Type: {article.article_type}</span>}
+                                    {article.institution && <span>Institution: {article.institution}</span>}
                                     <span className="font-mono">{article.doi}</span>
-                                    <span className="hidden md:inline">·</span>
                                     <span>{article.published_date}</span>
                                     {article.pdf_url && (
-                                        <>
-                                            <span className="hidden md:inline">·</span>
-                                            <a
-                                                href={article.pdf_url}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="text-primary hover:underline"
-                                            >
-                                                PDF
-                                            </a>
-                                        </>
+                                        <a
+                                            href={article.pdf_url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-primary hover:underline"
+                                        >
+                                            PDF
+                                        </a>
                                     )}
                                 </div>
                                 {/* Tags */}

@@ -12,11 +12,29 @@ export interface Article {
     id: string;
     title: string;
     author: string;
+    article_type?: string | null;
+    institution?: string | null;
     doi: string;
     published_date: string;
     pdf_url: string | null;
     tags: string[];
     created_at: string;
+}
+
+export interface ArticleComment {
+    id: string;
+    article_id: string;
+    user_id: string;
+    content: string;
+    helpful_count: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface ArticleTrashStat {
+    article_id: string;
+    trash_count: number;
+    updated_at: string;
 }
 
 export interface SubmissionRule {
@@ -30,9 +48,16 @@ export interface Submission {
     id: string;
     title: string;
     author: string;
+    article_type?: string | null;
+    institution?: string | null;
     abstract: string;
     pdf_path: string;
     status: 'pending' | 'approved' | 'rejected';
+    author_id?: string | null;
+    editorial_decision?: 'accept' | 'reject' | 'major_revision' | 'minor_revision' | null;
+    editorial_comment?: string | null;
+    editorial_decided_at?: string | null;
+    editor_id?: string | null;
     submitted_at: string;
 }
 
@@ -46,7 +71,7 @@ export interface AboutContent {
 
 // ============ NEW TYPES FOR JOURNAL SYSTEM EXPANSION ============
 
-export type UserRole = 'admin' | 'reviewer' | 'user';
+export type UserRole = 'admin' | 'editor' | 'reviewer' | 'user';
 
 export interface Profile {
     id: string;
@@ -114,6 +139,10 @@ export interface JournalSettings {
     id: string;
     impact_factor: number | null;
     impact_factor_year: number | null;
+    cite_score: number | null;
+    cite_score_year: number | null;
+    cover_image: string | null;
+    article_type_library: string[];
     editors_team: EditorTeamMember[];
     reviewers_team: ReviewerTeamMember[];
     about_page_additional: string | null;
@@ -121,16 +150,23 @@ export interface JournalSettings {
 }
 
 export interface EditorTeamMember {
+    user_id?: string;
     name: string;
     title: string;
     institution: string;
-    email: string;
+    email?: string;
+    research_field?: string;
+    avatar_url?: string | null;
+    signature?: string | null;
 }
 
 export interface ReviewerTeamMember {
+    user_id?: string;
     name: string;
     institution: string;
     research_field: string;
+    avatar_url?: string | null;
+    signature?: string | null;
 }
 
 // Database type map for the typed Supabase client
@@ -146,6 +182,16 @@ export interface Database {
                 Row: Article;
                 Insert: Omit<Article, "id" | "created_at">;
                 Update: Partial<Omit<Article, "id" | "created_at">>;
+            };
+            article_comments: {
+                Row: ArticleComment;
+                Insert: Omit<ArticleComment, "id" | "created_at" | "updated_at" | "helpful_count"> & { helpful_count?: number };
+                Update: Partial<Omit<ArticleComment, "id" | "created_at">>;
+            };
+            article_trash_stats: {
+                Row: ArticleTrashStat;
+                Insert: Omit<ArticleTrashStat, "updated_at">;
+                Update: Partial<Omit<ArticleTrashStat, "article_id">>;
             };
             submission_rules: {
                 Row: SubmissionRule;

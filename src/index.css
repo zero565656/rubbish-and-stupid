@@ -86,3 +86,124 @@
     font-family: var(--font-serif);
   }
 }
+
+@keyframes trash-throw {
+  0% {
+    opacity: 0.95;
+    transform: translate(var(--sx), var(--sy)) scale(1) rotate(0deg);
+  }
+  58% {
+    opacity: 1;
+    transform: translate(var(--mx), var(--my)) scale(0.9) rotate(260deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--ex), var(--ey)) scale(0.35) rotate(520deg);
+  }
+}
+
+@keyframes trash-fab-bump {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.15);
+  }
+  65% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes trash-lid-flip {
+  0% {
+    transform: rotate(0deg);
+  }
+  40% {
+    transform: rotate(-35deg) translateY(-2px);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes trash-plus-float {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.88);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-8px) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-30px) scale(0.95);
+  }
+}
+
+@keyframes particle-explode {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--tx), var(--ty)) scale(0) rotate(var(--rot));
+  }
+}
+
+.trash-throw-piece {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px; /* Make it look like paper */
+  background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
+  border: 1px solid #ccc;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  z-index: 10001;
+  animation: trash-throw 760ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.trash-fab-bump {
+  animation: trash-fab-bump 400ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.trash-lid-flip {
+  transform-origin: 20px 20px; /* Hinge on the left */
+  animation: trash-lid-flip 400ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.trash-plus-float {
+  animation: trash-plus-float 800ms ease-out forwards;
+}
+
+.trash-particle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  background-color: var(--p-color);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 10000;
+  transform-origin: center;
+  animation: particle-explode 600ms cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+/* Base lid hover interaction */
+.group:hover .trash-lid {
+  transform: rotate(-30deg) translateY(-2px);
+  transform-origin: 20px 20px;
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.trash-lid {
+  transition: transform 300ms ease;
+  transform-origin: 20px 20px;
+}

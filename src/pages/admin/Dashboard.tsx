@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import type { Submission, AboutContent, JournalMetadata, Profile, ReviewerInvitation, JournalSettings as JournalSettingsType, EditorTeamMember, ReviewerTeamMember } from "@/types/database.types";
@@ -7,8 +7,9 @@ import { queryClient } from "@/lib/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import ArticlesManager from "@/components/admin/ArticlesManager";
 import AssignReviewerModal from "@/components/admin/AssignReviewerModal";
+import { inviteReviewerWithAutoAccount } from "@/lib/reviewerInvite";
 
-// Inline confirm dialog — avoids window.confirm being silently blocked
+// Inline confirm dialog �?avoids window.confirm being silently blocked
 const ConfirmDialog = ({
     title,
     onConfirm,
@@ -62,6 +63,7 @@ const Dashboard = () => {
     const [reviewers, setReviewers] = useState<Profile[]>([]);
     const [invitations, setInvitations] = useState<ReviewerInvitation[]>([]);
     const [reviewersLoading, setReviewersLoading] = useState(true);
+    const [inviteName, setInviteName] = useState("");
     const [inviteEmail, setInviteEmail] = useState("");
     const [sendingInvite, setSendingInvite] = useState(false);
 
@@ -71,10 +73,19 @@ const Dashboard = () => {
     const [savingJournalSettings, setSavingJournalSettings] = useState(false);
     const [impactFactor, setImpactFactor] = useState<string>("");
     const [impactFactorYear, setImpactFactorYear] = useState<string>("");
+    const [citeScore, setCiteScore] = useState<string>("");
+    const [citeScoreYear, setCiteScoreYear] = useState<string>("");
+    const [coverImage, setCoverImage] = useState<string>("");
+    const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
+    const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null);
+    const [uploadingCover, setUploadingCover] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [editorsTeam, setEditorsTeam] = useState<EditorTeamMember[]>([]);
     const [reviewersTeam, setReviewersTeam] = useState<ReviewerTeamMember[]>([]);
-    const [newEditor, setNewEditor] = useState<EditorTeamMember>({ name: "", title: "", institution: "", email: "" });
-    const [newReviewer, setNewReviewer] = useState<ReviewerTeamMember>({ name: "", institution: "", research_field: "" });
+    const [availableEditorProfiles, setAvailableEditorProfiles] = useState<Profile[]>([]);
+    const [availableReviewerProfiles, setAvailableReviewerProfiles] = useState<Profile[]>([]);
+    const [selectedEditorProfileId, setSelectedEditorProfileId] = useState<string>("");
+    const [selectedReviewerProfileId, setSelectedReviewerProfileId] = useState<string>("");
 
     const navigate = useNavigate();
 
@@ -130,18 +141,35 @@ const Dashboard = () => {
 
     const fetchJournalSettings = async () => {
         setJournalSettingsLoading(true);
-        const { data, error } = await supabase
-            .from("journal_settings")
-            .select("*")
-            .limit(1)
-            .single();
-        if (!error && data) {
-            const settingsData = data as JournalSettingsType;
+        const [settingsRes, profilesRes] = await Promise.all([
+            supabase
+                .from("journal_settings")
+                .select("*")
+                .limit(1)
+                .single(),
+            supabase
+                .from("profiles")
+                .select("*")
+                .eq("is_active", true),
+        ]);
+
+        if (!settingsRes.error && settingsRes.data) {
+            const settingsData = settingsRes.data as JournalSettingsType;
             setJournalSettings(settingsData);
             setImpactFactor(settingsData.impact_factor?.toString() || "");
             setImpactFactorYear(settingsData.impact_factor_year?.toString() || "");
+            setCiteScore(settingsData.cite_score?.toString() || "");
+            setCiteScoreYear(settingsData.cite_score_year?.toString() || "");
+            setCoverImage(settingsData.cover_image || "");
+            setCoverImagePreview(settingsData.cover_image || null);
             setEditorsTeam(settingsData.editors_team || []);
             setReviewersTeam(settingsData.reviewers_team || []);
+        }
+
+        if (!profilesRes.error && profilesRes.data) {
+            const profileRows = profilesRes.data as Profile[];
+            setAvailableEditorProfiles(profileRows.filter((p) => p.role === "editor"));
+            setAvailableReviewerProfiles(profileRows.filter((p) => p.role === "reviewer"));
         }
         setJournalSettingsLoading(false);
     };
@@ -172,9 +200,12 @@ const Dashboard = () => {
                 {
                     title: submission.title,
                     author: submission.author,
+                    article_type: submission.article_type || null,
+                    institution: submission.institution || null,
                     doi: doi,
                     published_date: new Date().toISOString().split("T")[0],
                     pdf_url: publicUrlData.publicUrl,
+                    tags: submission.article_type ? [submission.article_type] : [],
                 },
             ] as any);
             if (insertError) throw insertError;
@@ -279,6 +310,108 @@ const Dashboard = () => {
         window.open(data.signedUrl, "_blank");
     };
 
+    const handleCoverUpload = async (): Promise<string | null> => {
+        if (!coverImageFile) return coverImage;
+
+        setUploadingCover(true);
+        try {
+            const fileExt = coverImageFile.name.split(".").pop();
+            const fileName = `cover_${Date.now()}.${fileExt}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from("journal-covers")
+                .upload(fileName, coverImageFile, { upsert: true });
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from("journal-covers")
+                .getPublicUrl(fileName);
+
+            return publicUrl;
+        } catch (error: any) {
+            toast.error(`Failed to upload cover: ${error.message}`);
+            return null;
+        } finally {
+            setUploadingCover(false);
+        }
+    };
+
+    const handleCoverImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setCoverImageFile(file);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setCoverImagePreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const removeCoverImage = () => {
+        setCoverImageFile(null);
+        setCoverImagePreview(null);
+        setCoverImage("");
+        if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+        }
+    };
+
+    const addEditorFromProfile = () => {
+        if (!selectedEditorProfileId) return;
+        const profile = availableEditorProfiles.find((item) => item.id === selectedEditorProfileId);
+        if (!profile) return;
+
+        if (editorsTeam.some((item) => item.user_id === profile.id)) {
+            toast.info("This editor is already in homepage list.");
+            return;
+        }
+
+        const editorMember: EditorTeamMember = {
+            user_id: profile.id,
+            name: profile.full_name || "Unnamed Editor",
+            title: "Editor",
+            institution: profile.institution || "",
+            email: "",
+            research_field: profile.research_field || "",
+            avatar_url: profile.avatar_url || null,
+            signature: profile.bio || null,
+        };
+        setEditorsTeam((prev) => [...prev, editorMember]);
+        setSelectedEditorProfileId("");
+    };
+
+    const addReviewerFromProfile = () => {
+        if (!selectedReviewerProfileId) return;
+        const profile = availableReviewerProfiles.find((item) => item.id === selectedReviewerProfileId);
+        if (!profile) return;
+
+        if (reviewersTeam.some((item) => item.user_id === profile.id)) {
+            toast.info("This reviewer is already in homepage list.");
+            return;
+        }
+
+        const reviewerMember: ReviewerTeamMember = {
+            user_id: profile.id,
+            name: profile.full_name || "Unnamed Reviewer",
+            institution: profile.institution || "",
+            research_field: profile.research_field || "",
+            avatar_url: profile.avatar_url || null,
+            signature: profile.bio || null,
+        };
+        setReviewersTeam((prev) => [...prev, reviewerMember]);
+        setSelectedReviewerProfileId("");
+    };
+
+    const removeEditorByIndex = (index: number) => {
+        setEditorsTeam((prev) => prev.filter((_, i) => i !== index));
+    };
+
+    const removeReviewerByIndex = (index: number) => {
+        setReviewersTeam((prev) => prev.filter((_, i) => i !== index));
+    };
+
     // ── Render ────────────────────────────────────────────────────────────────
     return (
         <div className="min-h-screen bg-background">
@@ -372,6 +505,20 @@ const Dashboard = () => {
 
                         <div className="w-px h-4 bg-border" />
 
+                        <Link
+                            to="/admin/users"
+                            className="text-xs font-sans uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                            Users
+                        </Link>
+
+                        <Link
+                            to="/admin/profile"
+                            className="text-xs font-sans uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                            Profile
+                        </Link>
+
                         <button
                             onClick={handleLogout}
                             className="text-xs font-sans uppercase tracking-widest text-muted-foreground hover:text-destructive transition-colors"
@@ -423,6 +570,18 @@ const Dashboard = () => {
                                                 <p className="font-sans text-sm text-primary mb-2">
                                                     By {submission.author}
                                                 </p>
+                                                <div className="flex flex-wrap gap-2 mb-2">
+                                                    {submission.article_type && (
+                                                        <span className="text-[10px] font-sans uppercase tracking-wider bg-primary/10 text-primary px-2 py-1 border border-primary/20">
+                                                            Type: {submission.article_type}
+                                                        </span>
+                                                    )}
+                                                    {submission.institution && (
+                                                        <span className="text-[10px] font-sans uppercase tracking-wider bg-muted text-foreground px-2 py-1 border border-border">
+                                                            Institution: {submission.institution}
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <p className="font-sans text-xs text-muted-foreground">
                                                     Submitted on{" "}
                                                     {new Date(submission.submitted_at).toLocaleDateString()}
@@ -479,7 +638,7 @@ const Dashboard = () => {
                 {/* ─── Tab: Settings ─── */}
                 {activeTab === "settings" && (
                     <div className="max-w-2xl">
-                        {/* Settings 子导航 */}
+                        {/* Settings 子导�?*/}
                         <div className="flex items-center gap-6 mb-8 border-b border-border">
                             <button
                                 onClick={() => setSettingsSubTab("home")}
@@ -731,36 +890,54 @@ const Dashboard = () => {
                             </h3>
                             <form onSubmit={async (e) => {
                                 e.preventDefault();
-                                if (!inviteEmail.trim() || !user) return;
+                                if (!inviteName.trim() || !inviteEmail.trim() || !user) return;
                                 setSendingInvite(true);
                                 try {
-                                    const token = crypto.randomUUID();
-                                    const expiresAt = new Date();
-                                    expiresAt.setDate(expiresAt.getDate() + 7);
-                                    const { error } = await supabase.from("reviewer_invitations").insert({
-                                        email: inviteEmail.trim(),
-                                        token,
-                                        invited_by: user.id,
-                                        status: "pending",
-                                        expires_at: expiresAt.toISOString(),
+                                    const result = await inviteReviewerWithAutoAccount({
+                                        reviewerEmail: inviteEmail.trim(),
+                                        reviewerName: inviteName.trim(),
                                     });
-                                    if (error) throw error;
                                     toast.success(`Invitation sent to ${inviteEmail}`);
+                                    setInviteName("");
                                     setInviteEmail("");
-                                    fetchReviewers();
+                                    if (result?.invitation) {
+                                        setInvitations((prev) => {
+                                            const next = [result.invitation as ReviewerInvitation, ...prev.filter((item) => item.email !== result.invitation.email)];
+                                            return next;
+                                        });
+                                    }
+                                    if (result?.profile) {
+                                        setReviewers((prev) => {
+                                            const existingIndex = prev.findIndex((item) => item.id === result.profile.id);
+                                            if (existingIndex === -1) {
+                                                return [result.profile as Profile, ...prev];
+                                            }
+                                            const next = [...prev];
+                                            next[existingIndex] = result.profile as Profile;
+                                            return next;
+                                        });
+                                    }
                                 } catch (error: any) {
                                     toast.error(`Failed: ${error.message}`);
                                 } finally {
                                     setSendingInvite(false);
                                 }
-                            }} className="flex gap-4">
+                            }} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <input
+                                    type="text"
+                                    required
+                                    placeholder="Reviewer full name"
+                                    value={inviteName}
+                                    onChange={(e) => setInviteName(e.target.value)}
+                                    className="border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                />
                                 <input
                                     type="email"
                                     required
                                     placeholder="reviewer@university.edu"
                                     value={inviteEmail}
                                     onChange={(e) => setInviteEmail(e.target.value)}
-                                    className="flex-1 border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                    className="border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                                 />
                                 <button
                                     type="submit"
@@ -792,13 +969,13 @@ const Dashboard = () => {
                                             <div className="flex gap-2">
                                                 <button
                                                     onClick={() => {
-                                                        const link = `${window.location.origin}/register?token=${invitation.token}`;
+                                                        const link = `${window.location.origin}/admin/login`;
                                                         navigator.clipboard.writeText(link);
-                                                        toast.success("Link copied!");
+                                                        toast.success("Login URL copied!");
                                                     }}
                                                     className="text-xs font-sans uppercase tracking-widest text-primary hover:underline"
                                                 >
-                                                    Copy Link
+                                                    Copy Login URL
                                                 </button>
                                                 <button
                                                     onClick={async () => {
@@ -861,11 +1038,20 @@ const Dashboard = () => {
                                 if (!journalSettings?.id) return;
                                 setSavingJournalSettings(true);
                                 try {
+                                    const uploadedCoverUrl = await handleCoverUpload();
+                                    if (uploadedCoverUrl === null) {
+                                        setSavingJournalSettings(false);
+                                        return;
+                                    }
+
                                     const { error } = await supabase
                                         .from("journal_settings")
                                         .update({
                                             impact_factor: impactFactor ? parseFloat(impactFactor) : null,
                                             impact_factor_year: impactFactorYear ? parseInt(impactFactorYear) : null,
+                                            cite_score: citeScore ? parseFloat(citeScore) : null,
+                                            cite_score_year: citeScoreYear ? parseInt(citeScoreYear) : null,
+                                            cover_image: uploadedCoverUrl || null,
                                             editors_team: editorsTeam,
                                             reviewers_team: reviewersTeam,
                                         })
@@ -883,8 +1069,8 @@ const Dashboard = () => {
                                     <h3 className="font-serif text-xl text-foreground mb-6">Impact Factor</h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2">
-                                            <label className="block text-xs font-sans uppercase tracking-widest font-semibold text-foreground">Impact Factor</label>
-                                            <input type="number" step="0.001" min="0" value={impactFactor} onChange={(e) => setImpactFactor(e.target.value)} placeholder="e.g., 3.456" className="w-full border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                                            <label className="block text-xs font-sans uppercase tracking-widest font-semibold text-foreground">Impact Factor (can be negative)</label>
+                                            <input type="number" step="0.001" value={impactFactor} onChange={(e) => setImpactFactor(e.target.value)} placeholder="e.g., -1.0 or 3.456" className="w-full border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                                         </div>
                                         <div className="space-y-2">
                                             <label className="block text-xs font-sans uppercase tracking-widest font-semibold text-foreground">Year</label>
@@ -893,55 +1079,155 @@ const Dashboard = () => {
                                     </div>
                                 </section>
 
+                                {/* CiteScore */}
+                                <section className="border border-border bg-card p-6">
+                                    <h3 className="font-serif text-xl text-foreground mb-6">CiteScore</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-2">
+                                            <label className="block text-xs font-sans uppercase tracking-widest font-semibold text-foreground">CiteScore (can be negative)</label>
+                                            <input type="number" step="0.001" value={citeScore} onChange={(e) => setCiteScore(e.target.value)} placeholder="e.g., -1.0 or 2.500" className="w-full border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="block text-xs font-sans uppercase tracking-widest font-semibold text-foreground">Year</label>
+                                            <input type="number" min="1900" max="2100" value={citeScoreYear} onChange={(e) => setCiteScoreYear(e.target.value)} placeholder="e.g., 2025" className="w-full border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                                        </div>
+                                    </div>
+                                </section>
+
+                                {/* Journal Cover */}
+                                <section className="border border-border bg-card p-6">
+                                    <h3 className="font-serif text-xl text-foreground mb-6">Journal Cover</h3>
+                                    <div className="space-y-4">
+                                        <p className="text-sm text-muted-foreground">
+                                            Upload a cover image for the journal (recommended 2:3 ratio).
+                                        </p>
+
+                                        {coverImagePreview ? (
+                                            <div className="relative inline-block">
+                                                <div className="bg-white p-1 w-40 h-60 shadow-2xl">
+                                                    <img
+                                                        src={coverImagePreview}
+                                                        alt="Journal Cover Preview"
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={removeCoverImage}
+                                                    className="absolute -top-2 -right-2 bg-destructive text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-destructive/80"
+                                                >
+                                                    x
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div
+                                                className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                                                onClick={() => fileInputRef.current?.click()}
+                                            >
+                                                <input
+                                                    ref={fileInputRef}
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={handleCoverImageChange}
+                                                    className="hidden"
+                                                />
+                                                <p className="text-sm text-muted-foreground">
+                                                    Click to upload cover image
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </section>
+
                                 {/* Editors Team */}
                                 <section className="border border-border bg-card p-6">
                                     <h3 className="font-serif text-xl text-foreground mb-6">Editors Team</h3>
+                                    <p className="text-sm text-muted-foreground mb-4">
+                                        Select existing editor users to control who appears on homepage.
+                                    </p>
                                     <div className="space-y-4 mb-6">
                                         {editorsTeam.map((editor, index) => (
-                                            <div key={index} className="flex items-center justify-between p-4 bg-muted border border-border/50">
+                                            <div key={editor.user_id || `${editor.name}-${index}`} className="flex items-center justify-between p-4 bg-muted border border-border/50">
                                                 <div>
                                                     <p className="font-medium text-foreground">{editor.name}</p>
-                                                    <p className="text-sm text-muted-foreground">{editor.title} - {editor.institution}</p>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        {editor.title || "Editor"}
+                                                        {editor.institution ? ` - ${editor.institution}` : ""}
+                                                    </p>
                                                 </div>
-                                                <button type="button" onClick={() => setEditorsTeam(editorsTeam.filter((_, i) => i !== index))} className="text-destructive hover:underline text-sm">Remove</button>
+                                                <button type="button" onClick={() => removeEditorByIndex(index)} className="text-destructive hover:underline text-sm">Remove</button>
                                             </div>
                                         ))}
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <input type="text" placeholder="Name" value={newEditor.name} onChange={(e) => setNewEditor({ ...newEditor, name: e.target.value })} className="border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                                        <input type="text" placeholder="Title" value={newEditor.title} onChange={(e) => setNewEditor({ ...newEditor, title: e.target.value })} className="border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                                        <input type="text" placeholder="Institution" value={newEditor.institution} onChange={(e) => setNewEditor({ ...newEditor, institution: e.target.value })} className="border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                                        <input type="email" placeholder="Email" value={newEditor.email} onChange={(e) => setNewEditor({ ...newEditor, email: e.target.value })} className="border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
+                                        <select
+                                            value={selectedEditorProfileId}
+                                            onChange={(e) => setSelectedEditorProfileId(e.target.value)}
+                                            className="border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                        >
+                                            <option value="">Select an editor user...</option>
+                                            {availableEditorProfiles.map((profile) => (
+                                                <option key={profile.id} value={profile.id}>
+                                                    {(profile.full_name || "Unnamed Admin") + (profile.institution ? ` - ${profile.institution}` : "")}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            type="button"
+                                            onClick={addEditorFromProfile}
+                                            disabled={!selectedEditorProfileId}
+                                            className="bg-secondary text-secondary-foreground text-xs uppercase tracking-widest px-4 py-2 border border-border hover:bg-secondary/80 disabled:opacity-50"
+                                        >
+                                            Add Editor
+                                        </button>
                                     </div>
-                                    <button type="button" onClick={() => { if (newEditor.name && newEditor.email) { setEditorsTeam([...editorsTeam, newEditor]); setNewEditor({ name: "", title: "", institution: "", email: "" }); } }} disabled={!newEditor.name || !newEditor.email} className="mt-4 bg-secondary text-secondary-foreground text-xs uppercase tracking-widest px-4 py-2 border border-border hover:bg-secondary/80 disabled:opacity-50">Add Editor</button>
                                 </section>
 
                                 {/* Reviewers Team */}
                                 <section className="border border-border bg-card p-6">
                                     <h3 className="font-serif text-xl text-foreground mb-6">Reviewers Team</h3>
+                                    <p className="text-sm text-muted-foreground mb-4">
+                                        Select existing reviewer users to control who appears on homepage.
+                                    </p>
                                     <div className="space-y-4 mb-6">
                                         {reviewersTeam.map((reviewer, index) => (
-                                            <div key={index} className="flex items-center justify-between p-4 bg-muted border border-border/50">
+                                            <div key={reviewer.user_id || `${reviewer.name}-${index}`} className="flex items-center justify-between p-4 bg-muted border border-border/50">
                                                 <div>
                                                     <p className="font-medium text-foreground">{reviewer.name}</p>
                                                     <p className="text-sm text-muted-foreground">{reviewer.institution}</p>
                                                     <p className="text-sm text-muted-foreground">{reviewer.research_field}</p>
                                                 </div>
-                                                <button type="button" onClick={() => setReviewersTeam(reviewersTeam.filter((_, i) => i !== index))} className="text-destructive hover:underline text-sm">Remove</button>
+                                                <button type="button" onClick={() => removeReviewerByIndex(index)} className="text-destructive hover:underline text-sm">Remove</button>
                                             </div>
                                         ))}
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <input type="text" placeholder="Name" value={newReviewer.name} onChange={(e) => setNewReviewer({ ...newReviewer, name: e.target.value })} className="border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                                        <input type="text" placeholder="Institution" value={newReviewer.institution} onChange={(e) => setNewReviewer({ ...newReviewer, institution: e.target.value })} className="border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                                        <input type="text" placeholder="Research Field" value={newReviewer.research_field} onChange={(e) => setNewReviewer({ ...newReviewer, research_field: e.target.value })} className="border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
+                                        <select
+                                            value={selectedReviewerProfileId}
+                                            onChange={(e) => setSelectedReviewerProfileId(e.target.value)}
+                                            className="border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                        >
+                                            <option value="">Select a reviewer user...</option>
+                                            {availableReviewerProfiles.map((profile) => (
+                                                <option key={profile.id} value={profile.id}>
+                                                    {(profile.full_name || "Unnamed Reviewer") + (profile.institution ? ` - ${profile.institution}` : "")}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            type="button"
+                                            onClick={addReviewerFromProfile}
+                                            disabled={!selectedReviewerProfileId}
+                                            className="bg-secondary text-secondary-foreground text-xs uppercase tracking-widest px-4 py-2 border border-border hover:bg-secondary/80 disabled:opacity-50"
+                                        >
+                                            Add Reviewer
+                                        </button>
                                     </div>
-                                    <button type="button" onClick={() => { if (newReviewer.name) { setReviewersTeam([...reviewersTeam, newReviewer]); setNewReviewer({ name: "", institution: "", research_field: "" }); } }} disabled={!newReviewer.name} className="mt-4 bg-secondary text-secondary-foreground text-xs uppercase tracking-widest px-4 py-2 border border-border hover:bg-secondary/80 disabled:opacity-50">Add Reviewer</button>
                                 </section>
 
                                 <div className="flex justify-end">
-                                    <button type="submit" disabled={savingJournalSettings} className="bg-primary text-primary-foreground text-xs uppercase tracking-widest px-8 py-3 hover:bg-primary/90 disabled:opacity-50">
-                                        {savingJournalSettings ? "Saving..." : "Save Settings"}
+                                    <button type="submit" disabled={savingJournalSettings || uploadingCover} className="bg-primary text-primary-foreground text-xs uppercase tracking-widest px-8 py-3 hover:bg-primary/90 disabled:opacity-50">
+                                        {savingJournalSettings || uploadingCover ? "Saving..." : "Save Settings"}
                                     </button>
                                 </div>
                             </form>

@@ -1,14 +1,36 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import JournalHeader from "@/components/JournalHeader";
+import { useAuth } from "@/contexts/AuthContext";
+import { Link } from "react-router-dom";
+
+const DEFAULT_ARTICLE_TYPES = [
+    "Computer Science",
+    "Biology",
+    "Physics",
+    "Mathematics",
+    "Chemistry",
+    "Medicine",
+    "Psychology",
+    "Economics",
+    "Environmental Science",
+    "Engineering",
+    "Philosophy",
+    "Social Science",
+    "Astronomy",
+    "Neuroscience",
+    "Materials Science",
+];
 
 const formSchema = z.object({
     title: z.string().min(5, "Title must be at least 5 characters"),
     author: z.string().min(2, "Author name is required"),
+    article_type: z.string().min(1, "Article type is required"),
+    institution: z.string().min(2, "Institution is required"),
     abstract: z.string().min(50, "Abstract must be at least 50 characters"),
     pdf: z.instanceof(File, { message: "Academic PDF is required" }),
 });
@@ -16,19 +38,90 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 const SubmitPaper = () => {
+    const { user, profile } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
     const [fileName, setFileName] = useState<string | null>(null);
+    const [articleTypeOptions, setArticleTypeOptions] = useState<string[]>([]);
+    const [loadingArticleTypes, setLoadingArticleTypes] = useState(true);
 
     const {
         register,
         handleSubmit,
         setValue,
+        getValues,
         reset,
         formState: { errors },
     } = useForm<FormValues>({
         resolver: zodResolver(formSchema),
     });
+
+    const fetchArticleTypeOptions = async () => {
+        setLoadingArticleTypes(true);
+
+        const { data: settingsData, error: settingsError } = await supabase
+            .from("journal_settings")
+            .select("article_type_library")
+            .limit(1)
+            .maybeSingle();
+
+        if (settingsError) {
+            toast.error(`Failed to load article types: ${settingsError.message}`);
+            setArticleTypeOptions(DEFAULT_ARTICLE_TYPES);
+            setLoadingArticleTypes(false);
+            return;
+        }
+
+        const library = ((settingsData as any)?.article_type_library || []) as string[];
+        const normalizedLibrary = Array.from(
+            new Set(
+                library
+                    .map((item) => item?.trim())
+                    .filter((item) => Boolean(item))
+            )
+        ).sort((a, b) => a.localeCompare(b));
+
+        if (normalizedLibrary.length > 0) {
+            setArticleTypeOptions(normalizedLibrary);
+            setLoadingArticleTypes(false);
+            return;
+        }
+
+        // Fallback for older projects where global library is empty.
+        const { data: articleTagData, error: articleTagError } = await supabase
+            .from("articles")
+            .select("tags");
+
+        if (articleTagError) {
+            toast.error(`Failed to load article tags fallback: ${articleTagError.message}`);
+            setArticleTypeOptions(DEFAULT_ARTICLE_TYPES);
+            setLoadingArticleTypes(false);
+            return;
+        }
+
+        const allTags = (articleTagData || []).flatMap((row: any) => row.tags || []);
+        const normalizedTags = Array.from(
+            new Set(
+                allTags
+                    .map((tag: string) => tag?.trim())
+                    .filter((tag: string) => Boolean(tag))
+            )
+        ).sort((a, b) => a.localeCompare(b));
+
+        setArticleTypeOptions(normalizedTags.length > 0 ? normalizedTags : DEFAULT_ARTICLE_TYPES);
+        setLoadingArticleTypes(false);
+    };
+
+    useEffect(() => {
+        if (!user?.id) return;
+        fetchArticleTypeOptions();
+    }, [user?.id]);
+
+    useEffect(() => {
+        if (!profile?.institution) return;
+        if (getValues("institution")) return;
+        setValue("institution", profile.institution, { shouldValidate: false });
+    }, [profile?.institution, getValues, setValue]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -47,6 +140,11 @@ const SubmitPaper = () => {
     };
 
     const onSubmit = async (data: FormValues) => {
+        if (!user) {
+            toast.error("Please log in before submitting a paper.");
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             // 1. Upload PDF to Storage
@@ -64,9 +162,12 @@ const SubmitPaper = () => {
             const { error: dbError } = await supabase.from("submissions").insert({
                 title: data.title,
                 author: data.author,
+                article_type: data.article_type,
+                institution: data.institution,
                 abstract: data.abstract,
                 pdf_path: filePath,
                 status: "pending",
+                author_id: user.id,
             } as any);
 
             if (dbError) throw new Error(`Database error: ${dbError.message}`);
@@ -120,6 +221,34 @@ const SubmitPaper = () => {
         );
     }
 
+    if (!user) {
+        return (
+            <div className="min-h-screen bg-background flex flex-col">
+                <JournalHeader />
+                <main className="flex-1 container mx-auto px-6 py-24 max-w-2xl flex flex-col items-center justify-center text-center">
+                    <h1 className="font-serif text-3xl text-foreground mb-4">Login Required</h1>
+                    <p className="font-sans text-muted-foreground mb-8">
+                        You need an author account to submit a manuscript.
+                    </p>
+                    <div className="flex gap-4">
+                        <Link
+                            to="/admin/login"
+                            className="text-sm font-sans uppercase tracking-widest border border-border px-6 py-3 hover:bg-muted transition-colors"
+                        >
+                            Log In
+                        </Link>
+                        <Link
+                            to="/register-author"
+                            className="text-sm font-sans uppercase tracking-widest bg-primary text-primary-foreground px-6 py-3 hover:bg-primary/90 transition-colors"
+                        >
+                            Register
+                        </Link>
+                    </div>
+                </main>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-background flex flex-col">
             <JournalHeader />
@@ -164,6 +293,50 @@ const SubmitPaper = () => {
                         {errors.author && (
                             <p className="text-xs text-destructive">{errors.author.message}</p>
                         )}
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <label className="text-sm font-sans font-medium text-foreground uppercase tracking-wider">
+                                Article Type
+                            </label>
+                            <select
+                                {...register("article_type")}
+                                disabled={loadingArticleTypes || articleTypeOptions.length === 0}
+                                className={`w-full bg-transparent border ${errors.article_type ? "border-destructive focus:border-destructive" : "border-border focus:border-foreground"} p-3 outline-none transition-colors font-sans text-base disabled:opacity-60`}
+                            >
+                                <option value="">
+                                    {loadingArticleTypes ? "Loading tags from backend..." : "Select article type"}
+                                </option>
+                                {articleTypeOptions.map((tag) => (
+                                    <option key={tag} value={tag}>
+                                        {tag}
+                                    </option>
+                                ))}
+                            </select>
+                            {articleTypeOptions.length === 0 && !loadingArticleTypes && (
+                                <p className="text-xs text-muted-foreground">
+                                    No article tags configured in backend yet. Please add tags in Admin Articles first.
+                                </p>
+                            )}
+                            {errors.article_type && (
+                                <p className="text-xs text-destructive">{errors.article_type.message}</p>
+                            )}
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-sans font-medium text-foreground uppercase tracking-wider">
+                                Institution
+                            </label>
+                            <input
+                                {...register("institution")}
+                                className={`w-full bg-transparent border-b ${errors.institution ? "border-destructive focus:border-destructive" : "border-border focus:border-foreground"} pb-2 outline-none transition-colors font-serif text-lg placeholder:text-muted/50`}
+                                placeholder="e.g., University of Rubbish Studies"
+                            />
+                            {errors.institution && (
+                                <p className="text-xs text-destructive">{errors.institution.message}</p>
+                            )}
+                        </div>
                     </div>
 
                     <div className="space-y-2">
@@ -213,7 +386,7 @@ const SubmitPaper = () => {
 
                     <button
                         type="submit"
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || loadingArticleTypes || articleTypeOptions.length === 0}
                         className="w-full bg-primary text-primary-foreground font-sans text-sm uppercase tracking-widest px-8 py-5 border-2 border-primary hover:bg-background hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
                     >
                         {isSubmitting ? "Submitting to Reviewers..." : "Submit Manuscript"}

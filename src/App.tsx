@@ -13,11 +13,19 @@ import Login from "./pages/admin/Login";
 import Dashboard from "./pages/admin/Dashboard";
 import ReviewerManagement from "./pages/admin/ReviewerManagement";
 import JournalSettings from "./pages/admin/JournalSettings";
+import UserManagement from "./pages/admin/UserManagement";
 import ReviewerDashboard from "./pages/reviewer/Dashboard";
+import ReviewerProfile from "./pages/reviewer/Profile";
+import EditorDashboard from "./pages/editor/Dashboard";
+import EditorProfile from "./pages/editor/Profile";
 import Register from "./pages/Register";
-import { ProtectedRoute } from "./components/ProtectedRoute";
+import AuthorRegister from "./pages/AuthorRegister";
+import UserProfile from "./pages/UserProfile";
 import { AdminRoute } from "./components/admin/AdminRoute";
 import { ReviewerRoute } from "./components/reviewer/ReviewerRoute";
+import { EditorRoute } from "./components/editor/EditorRoute";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import AdminProfile from "./pages/admin/Profile";
 import { queryClient } from "@/lib/react-query";
 import { AuthProvider } from "./contexts/AuthContext";
 
@@ -35,13 +43,14 @@ const App = () => (
             <Route path="/article/:id" element={<ArticleDetail />} />
             <Route path="/my-submissions" element={<MySubmissions />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/register-author" element={<AuthorRegister />} />
             <Route path="/admin/login" element={<Login />} />
             <Route
               path="/admin"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <Dashboard />
-                </ProtectedRoute>
+                </AdminRoute>
               }
             />
             <Route
@@ -49,6 +58,22 @@ const App = () => (
               element={
                 <AdminRoute>
                   <ReviewerManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/users"
+              element={
+                <AdminRoute>
+                  <UserManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/profile"
+              element={
+                <AdminRoute>
+                  <AdminProfile />
                 </AdminRoute>
               }
             />
@@ -66,6 +91,38 @@ const App = () => (
                 <ReviewerRoute>
                   <ReviewerDashboard />
                 </ReviewerRoute>
+              }
+            />
+            <Route
+              path="/reviewer/profile"
+              element={
+                <ReviewerRoute>
+                  <ReviewerProfile />
+                </ReviewerRoute>
+              }
+            />
+            <Route
+              path="/editor"
+              element={
+                <EditorRoute>
+                  <EditorDashboard />
+                </EditorRoute>
+              }
+            />
+            <Route
+              path="/editor/profile"
+              element={
+                <EditorRoute>
+                  <EditorProfile />
+                </EditorRoute>
+              }
+            />
+            <Route
+              path="/user/profile"
+              element={
+                <ProtectedRoute allowedRoles={["user"]}>
+                  <UserProfile />
+                </ProtectedRoute>
               }
             />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
